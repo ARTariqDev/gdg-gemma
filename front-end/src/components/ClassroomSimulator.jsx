@@ -59,15 +59,13 @@ export default function ClassroomSimulator({
   onToggleGemmaSidebar,
   guidedRole,
   tourAction,
-  onOpenSidebarWithRole
+  onOpenSidebarWithRole,
+  onCodeChange
 }) {
   const [fileList, setFileList] = useState(INITIAL_FILE_TEMPLATES);
   const [selectedFile, setSelectedFile] = useState(INITIAL_FILE_TEMPLATES[0]);
   const [students, setStudents] = useState(INITIAL_STUDENTS);
 
-  // Active Tab state based on user role:
-  // Teacher: 'inspect-student' | 'grid' | 'live-teacher'
-  // Student: 'assignments' | 'student-copy' | 'live-teacher'
   const [activeTab, setActiveTab] = useState(userRole === 'student' ? 'assignments' : 'inspect-student');
 
   const [selectedStudentForTeacher, setSelectedStudentForTeacher] = useState(INITIAL_STUDENTS[0]);
@@ -85,6 +83,32 @@ export default function ClassroomSimulator({
       setActiveTab('inspect-student');
     }
   }, [userRole]);
+
+  // Synchronize student and teacher editor content whenever selectedFile changes
+  const handleSelectFile = (file) => {
+    setSelectedFile(file);
+    setStudentCode(file.content);
+    setTeacherEditingCode(file.content);
+  };
+
+  // Dynamically propagate active open editor content and file name up to App -> Gemma AI Widget
+  useEffect(() => {
+    if (!onCodeChange) return;
+
+    if (activeTab === 'assignments' || activeTab === 'student-copy') {
+      onCodeChange(studentCode, selectedFile ? selectedFile.name : 'assignment.py');
+    } else if (activeTab === 'inspect-student' && userRole === 'teacher') {
+      onCodeChange(
+        teacherEditingCode,
+        selectedStudentForTeacher ? `${selectedStudentForTeacher.name}_${selectedFile.name}` : selectedFile.name
+      );
+    } else {
+      onCodeChange(
+        selectedFile ? selectedFile.content : '',
+        selectedFile ? selectedFile.name : 'binary_tree_lab.py'
+      );
+    }
+  }, [activeTab, selectedFile, studentCode, teacherEditingCode, selectedStudentForTeacher, userRole, onCodeChange]);
 
   // Handle local file upload
   const handleFileUpload = (e) => {
@@ -109,7 +133,7 @@ export default function ClassroomSimulator({
       };
 
       setFileList(prev => [newFileObj, ...prev]);
-      setSelectedFile(newFileObj);
+      handleSelectFile(newFileObj);
     };
 
     reader.readAsText(uploadedFile);
@@ -127,6 +151,7 @@ export default function ClassroomSimulator({
       setIsBroadcasting(false);
       if (data.document) {
         setStudentCode(data.document);
+        setTeacherEditingCode(data.document);
       }
     };
 
@@ -201,7 +226,7 @@ export default function ClassroomSimulator({
 
   const handleSelectStudentForTeacher = (student) => {
     setSelectedStudentForTeacher(student);
-    setTeacherEditingCode(student.code);
+    setTeacherEditingCode(student.code || selectedFile.content);
     setIsTeacherLocked(student.isLocked);
   };
 
@@ -318,7 +343,7 @@ export default function ClassroomSimulator({
 
           {/* Main Content Area */}
           <div className="p-6">
-            {/* STUDENT VIEW 1: Assignments Tab (Files sent by instructor + Built-in Editor + Deadline) */}
+            {/* STUDENT VIEW 1: Assignments Tab */}
             {activeTab === 'assignments' && userRole === 'student' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left: Transmitted Assignment List & Deadlines */}
@@ -338,10 +363,7 @@ export default function ClassroomSimulator({
                       {fileList.map((file) => (
                         <div
                           key={file.id}
-                          onClick={() => {
-                            setSelectedFile(file);
-                            setStudentCode(file.content);
-                          }}
+                          onClick={() => handleSelectFile(file)}
                           className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all space-y-1.5 ${
                             selectedFile.id === file.id
                               ? 'bg-indigo-950/80 border-indigo-500/60 text-white shadow-lg ring-1 ring-indigo-500/40'
@@ -400,7 +422,7 @@ export default function ClassroomSimulator({
 
                   <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2 font-mono">
-                      <span>Interactive Student Workspace</span>
+                      <span>Interactive Student Workspace ({selectedFile.name})</span>
                       <span className="text-cyan-400">Auto-saved to session room</span>
                     </div>
 
@@ -531,7 +553,7 @@ export default function ClassroomSimulator({
                       {fileList.map((file) => (
                         <button
                           key={file.id}
-                          onClick={() => setSelectedFile(file)}
+                          onClick={() => handleSelectFile(file)}
                           className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
                             selectedFile.id === file.id
                               ? 'bg-indigo-950/80 border-indigo-500/60 text-white shadow-md'
@@ -663,6 +685,40 @@ export default function ClassroomSimulator({
                     <p className="pl-8">root.left = insert_node(root.left, key)</p>
                     <p className="pl-4"><span className="text-purple-400">return</span> root</p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* STUDENT VIEW 2: Student Personal Built-in Copy Sandbox Editor */}
+            {activeTab === 'student-copy' && userRole === 'student' && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-cyan-600/20 text-cyan-400 rounded-xl">
+                      <Code2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">My Transmitted Code Sandbox</h4>
+                      <p className="text-xs text-slate-400">Edit your copy. Your instructor can view & co-edit with you live.</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full">
+                    Student Sandbox Active
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2 font-mono">
+                    <span className="font-mono text-cyan-300 font-bold">{selectedFile.name}</span>
+                    <span>Language: {selectedFile.language}</span>
+                  </div>
+
+                  <textarea
+                    value={studentCode}
+                    onChange={(e) => setStudentCode(e.target.value)}
+                    rows={12}
+                    className="w-full p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500 leading-relaxed"
+                  />
                 </div>
               </div>
             )}

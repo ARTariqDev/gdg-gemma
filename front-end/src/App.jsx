@@ -5,13 +5,17 @@ import CentralChatroom from './components/CentralChatroom';
 import ClassroomSimulator from './components/ClassroomSimulator';
 import GemmaAiSidebar from './components/GemmaAiSidebar';
 import GuidedTourDriver from './components/GuidedTourDriver';
+import FloatingGemmaButton from './components/FloatingGemmaButton';
 
 export default function App() {
   // Navigation Flow States: 'auth' -> 'room-entry' -> 'chatroom' (default global chat) | 'classroom'
   const [currentStep, setCurrentStep] = useState('auth');
-  const [userRole, setUserRole] = useState('teacher'); // 'teacher' | 'student'
+  const [userRole, setUserRole] = useState('teacher');
   const [activeRoomId, setActiveRoomId] = useState('CS-204');
   const [username, setUsername] = useState('Dr. Vance');
+
+  const [activeDocument, setActiveDocument] = useState(`def insert_node(root, key):\n    if root is None:\n        return Node(key)\n    if key < root.val:\n        root.left = insert_node(root.left, key)\n    else:\n        root.right = insert_node(root.right, key)\n    return root`);
+  const [activeFileName, setActiveFileName] = useState('binary_tree_lab.py');
 
   const [isGemmaSidebarOpen, setIsGemmaSidebarOpen] = useState(false);
   const [sidebarRole, setSidebarRole] = useState('teacher');
@@ -33,7 +37,6 @@ export default function App() {
     setUsername(username);
     setUserRole(role);
     setSidebarRole(role);
-    // User lands directly in the Global Chatroom!
     setCurrentStep('chatroom');
   };
 
@@ -55,12 +58,12 @@ export default function App() {
     setIsGemmaSidebarOpen(true);
   };
 
-  // Step 1: Sign in Screen (Sign in as Student / Sign in as Teacher)
+  // Step 1: Sign in Screen
   if (currentStep === 'auth') {
     return <AuthScreen onSelectRole={handleSelectRole} />;
   }
 
-  // Step 2: Room Entry Screen (Enter Room Key)
+  // Step 2: Room Entry Screen
   if (currentStep === 'room-entry') {
     return (
       <RoomEntryScreen
@@ -71,10 +74,10 @@ export default function App() {
     );
   }
 
-  // Step 3 (Default after room entry): Global Chatroom View
+  // Step 3: Global Chatroom View
   if (currentStep === 'chatroom') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased relative">
         <CentralChatroom
           roomId={activeRoomId}
           userRole={userRole}
@@ -90,7 +93,15 @@ export default function App() {
         <GemmaAiSidebar
           isOpen={isGemmaSidebarOpen}
           onClose={() => setIsGemmaSidebarOpen(false)}
+          currentFile={{ name: activeFileName, content: activeDocument }}
           initialRole={sidebarRole}
+        />
+
+        {/* Floating Ask Gemma Widget */}
+        <FloatingGemmaButton
+          activeDocument={activeDocument}
+          activeFileName={activeFileName}
+          role={userRole}
         />
       </div>
     );
@@ -98,7 +109,7 @@ export default function App() {
 
   // Step 4: Code Workspace View
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased flex flex-col selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased flex flex-col selection:bg-indigo-500 selection:text-white relative">
       {/* Workspace Header */}
       <header className="bg-slate-900/90 border-b border-slate-800 px-6 py-3 sticky top-0 z-40 backdrop-blur-xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -142,12 +153,17 @@ export default function App() {
           guidedRole={tourRole}
           tourAction={currentTourAction}
           onOpenSidebarWithRole={handleOpenSidebarWithRole}
+          onCodeChange={(code, fileName) => {
+            setActiveDocument(code);
+            if (fileName) setActiveFileName(fileName);
+          }}
         />
       </main>
 
       <GemmaAiSidebar
         isOpen={isGemmaSidebarOpen}
         onClose={() => setIsGemmaSidebarOpen(false)}
+        currentFile={{ name: activeFileName, content: activeDocument }}
         initialRole={sidebarRole}
       />
 
@@ -159,6 +175,13 @@ export default function App() {
           setCurrentTourAction('');
         }}
         onExecuteTourStep={handleExecuteTourStep}
+      />
+
+      {/* Floating Ask Gemma Widget */}
+      <FloatingGemmaButton
+        activeDocument={activeDocument}
+        activeFileName={activeFileName}
+        role={userRole}
       />
     </div>
   );
